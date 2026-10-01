@@ -242,7 +242,7 @@ async function carregarUsuarios(){
        <td>${esc(u.perfil||'')}</td>
        <td>${status}</td>
        <td class="actions">
-         <button class="btn secondary small" onclick="editarUsuario('${u.id}',${JSON.stringify(u.nome||'')},${JSON.stringify(u.email||'')},${JSON.stringify(u.perfil||'operador')})">Editar</button>
+         <button class="btn secondary small" onclick="editarUsuario('${u.id}')">Editar</button>
          ${acaoBloq}
          <button class="btn danger small" onclick="excluirUsuario('${u.id}')">Excluir</button>
        </td>
@@ -253,22 +253,51 @@ async function carregarUsuarios(){
  }
 }
 
-async function editarUsuario(id,nomeAtual,emailAtual,perfilAtual){
- const nome=prompt('Nome do usuário:',nomeAtual);
- if(nome===null) return;
- const email=prompt('E-mail do usuário:',emailAtual);
- if(email===null) return;
- const perfil=confirm('Clique em OK para Administrador ou Cancelar para Operador.');
+async function editarUsuario(id){
  try{
-   await chamarGerenciamento('editar',{id,nome:nome.trim(),email:email.trim(),perfil:perfil?'admin':'operador'});
-   await registrarHistorico('Edição',emailAtual,`Nome: ${nome.trim()} | E-mail: ${email.trim()} | Perfil: ${perfil?'admin':'operador'}`);
+   const data=await chamarGerenciamento('listar');
+   const u=(data?.usuarios||[]).find(x=>String(x.id)===String(id));
+
+   if(!u){
+     alert('Usuário não encontrado.');
+     return;
+   }
+
+   const nome=prompt('Nome do usuário:',u.nome||'');
+   if(nome===null) return;
+
+   const email=prompt('E-mail do usuário:',u.email||'');
+   if(email===null) return;
+
+   const perfil=confirm(
+     'Perfil do usuário:\\n\\n' +
+     'OK = Administrador\\n' +
+     'Cancelar = Operador'
+   );
+
+   await chamarGerenciamento('editar',{
+     id:id,
+     nome:nome.trim(),
+     email:email.trim(),
+     perfil:perfil?'admin':'operador'
+   });
+
+   await registrarHistorico(
+     'Edição',
+     u.email||id,
+     `Nome: ${nome.trim()} | E-mail: ${email.trim()} | Perfil: ${perfil?'admin':'operador'}`
+   );
+
    userMsg.style.color='#087443';
    userMsg.textContent='Usuário atualizado com sucesso.';
    await carregarUsuarios();
    await carregarHistorico();
+   setTimeout(()=>userMsg.textContent='',3000);
+
  }catch(e){
+   console.error(e);
    userMsg.style.color='#c00';
-   userMsg.textContent='Erro ao editar: '+e.message;
+   userMsg.textContent='Erro ao editar: '+(e.message||'erro desconhecido');
  }
 }
 
