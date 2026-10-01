@@ -19,7 +19,7 @@ label{font-size:13px;font-weight:700}.grid{display:grid;grid-template-columns:re
 .panel{background:#fff;border-radius:10px;padding:18px;margin-bottom:20px;box-shadow:0 2px 10px #0000000d}
 table{width:100%;border-collapse:collapse}th,td{padding:11px;border-bottom:1px solid #e5e7eb;text-align:left;font-size:14px}
 th{background:#f8fafc}.status{padding:5px 8px;border-radius:20px;font-size:12px;font-weight:700;display:inline-block}
-.s1{background:#dbeafe;color:#1d4ed8}.s2{background:#ede9fe;color:#6d28d9}.s3{background:#fef3c7;color:#92400e}.s4{background:#fee2e2;color:#991b1b}.s5{background:#dcfce7;color:#166534}
+.s0{background:#e0f2fe;color:#0369a1}.s1{background:#dbeafe;color:#1d4ed8}.s6{background:#fce7f3;color:#9d174d}.s2{background:#ede9fe;color:#6d28d9}.s3{background:#fef3c7;color:#92400e}.s4{background:#fee2e2;color:#991b1b}.s5{background:#dcfce7;color:#166534}
 .actions{display:flex;gap:6px}.small{padding:6px 9px;font-size:12px}
 @media(max-width:900px){.grid,.cards{grid-template-columns:repeat(2,1fr)}}@media(max-width:600px){.grid,.cards{grid-template-columns:1fr}table{display:block;overflow:auto}}
 </style>
@@ -66,27 +66,49 @@ th{background:#f8fafc}.status{padding:5px 8px;border-radius:20px;font-size:12px;
 <div><label>Data inicial</label><input id="fIni" type="date" onchange="render()"></div>
 <div><label>Data final</label><input id="fFim" type="date" onchange="render()"></div>
 </div>
-<table><thead><tr><th>Data</th><th>Parceiro</th><th>Nome do cliente / CEL</th><th>Status</th><th>Ações</th></tr></thead><tbody id="tbody"></tbody></table>
+<table><thead><tr><th>Data</th><th>Parceiro</th><th>Nome do cliente / CEL</th><th>Status</th><th>Usuário</th><th>Ações</th></tr></thead><tbody id="tbody"></tbody></table>
 </div>
 
 <div id="adminPanel" class="panel hidden">
 <h3>👤 Administração de usuários</h3>
-<p style="color:#667085">Somente administradores podem cadastrar novos usuários.</p>
+<p style="color:#667085">Somente administradores podem gerenciar usuários.</p>
+
 <div class="grid" style="grid-template-columns:2fr 2fr 1fr 1fr">
 <div><label>Nome</label><input id="uNome" placeholder="Nome do usuário"></div>
 <div><label>E-mail</label><input id="uEmail" type="email" placeholder="usuario@empresa.com"></div>
 <div><label>Senha</label><input id="uSenha" type="password" placeholder="Mínimo 6 caracteres"></div>
 <div><label>Perfil</label><select id="uPerfil"><option value="operador">Operador</option><option value="admin">Administrador</option></select></div>
 </div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
 <button class="btn primary" onclick="cadastrarUsuario()">Cadastrar usuário</button>
 <button class="btn secondary" onclick="limparUsuarioForm()">Limpar</button>
+<button class="btn secondary" onclick="carregarUsuarios()">Atualizar lista</button>
+</div>
 <p id="userMsg"></p>
+
+<h3>Usuários cadastrados</h3>
+<div style="overflow-x:auto;">
+<table style="width:100%;border-collapse:collapse;">
+<thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead>
+<tbody id="listaUsuarios"></tbody>
+</table>
+</div>
+
+<h3 style="margin-top:24px">📝 Histórico administrativo</h3>
+<div style="overflow-x:auto;">
+<table style="width:100%;border-collapse:collapse;">
+<thead><tr><th>Data/Hora</th><th>Administrador</th><th>Ação</th><th>Usuário afetado</th><th>Detalhes</th></tr></thead>
+<tbody id="listaHistorico"></tbody>
+</table>
+</div>
+<button class="btn secondary" style="margin-top:10px" onclick="carregarHistorico()">Atualizar histórico</button>
 </div>
 </div></div>
 
 <script src="config.js"></script>
 <script>
 const statuses=[
+ {v:'Aguardando aceitar',c:'s0'},
  {v:'Processo de Vídeo',c:'s1'},
  {v:'Emissão Online',c:'s2'},
  {v:'Pendente de Documento',c:'s3'},
@@ -98,6 +120,7 @@ const statuses=[
 function setup(){
  document.getElementById('pData').value=new Date().toISOString().slice(0,10);
  document.getElementById('pStatus').innerHTML=statuses.map(x=>`<option>${x.v}</option>`).join('');
+  document.getElementById('pStatus').value=statuses[0].v;
  document.getElementById('fStatus').innerHTML='<option value="">Todos os status</option>'+statuses.map(x=>`<option>${x.v}</option>`).join('');
  if(window.SUPABASE_URL && window.SUPABASE_ANON_KEY && !window.SUPABASE_URL.includes('COLOQUE')){
    supabaseClient=window.supabase.createClient(window.SUPABASE_URL,window.SUPABASE_ANON_KEY);
@@ -137,6 +160,8 @@ async function carregarPerfil(){
 
  if(data?.perfil==='admin'){
    adminPanel.classList.remove('hidden');
+   await carregarUsuarios();
+   await carregarHistorico();
  }else{
    adminPanel.classList.add('hidden');
  }
@@ -180,10 +205,149 @@ async function cadastrarUsuario(){
    return;
  }
 
- userMsg.style.color='#087443';
- userMsg.textContent='Usuário cadastrado com sucesso.';
- limparUsuarioForm();
- setTimeout(()=>userMsg.textContent='',3000);
+userMsg.style.color='#087443';
+userMsg.textContent='Usuário cadastrado com sucesso.';
+limparUsuarioForm();
+await carregarUsuarios();
+await registrarHistorico('Cadastro','Novo usuário',`${nome} (${email})`);
+await carregarHistorico();
+setTimeout(()=>userMsg.textContent='',3000);
+}
+
+
+async function chamarGerenciamento(acao, extra={}){
+ const {data,error}=await supabaseClient.functions.invoke('dynamic-task',{
+   body:{acao,...extra}
+ });
+ if(error) throw new Error(error.message||'Erro ao chamar a função.');
+ if(data?.error) throw new Error(data.error);
+ return data;
+}
+
+async function carregarUsuarios(){
+ const tbody=document.getElementById('listaUsuarios');
+ if(!tbody) return;
+ tbody.innerHTML='<tr><td colspan="5">Carregando...</td></tr>';
+ try{
+   const data=await chamarGerenciamento('listar');
+   const usuarios=data?.usuarios||[];
+   tbody.innerHTML=usuarios.map(u=>{
+     const status=u.ativo!==false?'Ativo':'Bloqueado';
+     const acaoBloq=u.ativo!==false
+       ? `<button class="btn danger small" onclick="bloquearUsuario('${u.id}')">Bloquear</button>`
+       : `<button class="btn primary small" onclick="desbloquearUsuario('${u.id}')">Desbloquear</button>`;
+     return `<tr>
+       <td>${esc(u.nome||'')}</td>
+       <td>${esc(u.email||'')}</td>
+       <td>${esc(u.perfil||'')}</td>
+       <td>${status}</td>
+       <td class="actions">
+         <button class="btn secondary small" onclick="editarUsuario('${u.id}',${JSON.stringify(u.nome||'')},${JSON.stringify(u.email||'')},${JSON.stringify(u.perfil||'operador')})">Editar</button>
+         ${acaoBloq}
+         <button class="btn danger small" onclick="excluirUsuario('${u.id}')">Excluir</button>
+       </td>
+     </tr>`;
+   }).join('') || '<tr><td colspan="5">Nenhum usuário encontrado.</td></tr>';
+ }catch(e){
+   tbody.innerHTML=`<tr><td colspan="5" style="color:#c00">Erro: ${esc(e.message)}</td></tr>`;
+ }
+}
+
+async function editarUsuario(id,nomeAtual,emailAtual,perfilAtual){
+ const nome=prompt('Nome do usuário:',nomeAtual);
+ if(nome===null) return;
+ const email=prompt('E-mail do usuário:',emailAtual);
+ if(email===null) return;
+ const perfil=confirm('Clique em OK para Administrador ou Cancelar para Operador.');
+ try{
+   await chamarGerenciamento('editar',{id,nome:nome.trim(),email:email.trim(),perfil:perfil?'admin':'operador'});
+   await registrarHistorico('Edição',emailAtual,`Nome: ${nome.trim()} | E-mail: ${email.trim()} | Perfil: ${perfil?'admin':'operador'}`);
+   userMsg.style.color='#087443';
+   userMsg.textContent='Usuário atualizado com sucesso.';
+   await carregarUsuarios();
+   await carregarHistorico();
+ }catch(e){
+   userMsg.style.color='#c00';
+   userMsg.textContent='Erro ao editar: '+e.message;
+ }
+}
+
+async function bloquearUsuario(id){
+ if(!confirm('Bloquear este usuário?')) return;
+ try{
+   const u=await obterUsuarioPorId(id);
+   await chamarGerenciamento('bloquear',{id});
+   await registrarHistorico('Bloqueio',u?.email||id,'Usuário bloqueado');
+   await carregarUsuarios();
+   await carregarHistorico();
+ }catch(e){ alert('Erro ao bloquear: '+e.message); }
+}
+
+async function desbloquearUsuario(id){
+ if(!confirm('Desbloquear este usuário?')) return;
+ try{
+   const u=await obterUsuarioPorId(id);
+   await chamarGerenciamento('desbloquear',{id});
+   await registrarHistorico('Desbloqueio',u?.email||id,'Usuário desbloqueado');
+   await carregarUsuarios();
+   await carregarHistorico();
+ }catch(e){ alert('Erro ao desbloquear: '+e.message); }
+}
+
+async function excluirUsuario(id){
+ if(!confirm('ATENÇÃO: excluir este usuário permanentemente?')) return;
+ try{
+   const u=await obterUsuarioPorId(id);
+   await chamarGerenciamento('excluir',{id});
+   await registrarHistorico('Exclusão',u?.email||id,'Usuário excluído');
+   await carregarUsuarios();
+   await carregarHistorico();
+ }catch(e){ alert('Erro ao excluir: '+e.message); }
+}
+
+async function obterUsuarioPorId(id){
+ try{
+   const data=await chamarGerenciamento('listar');
+   return (data?.usuarios||[]).find(u=>String(u.id)===String(id));
+ }catch(e){ return null; }
+}
+
+async function registrarHistorico(acao,usuarioAfetado,detalhes){
+ try{
+   await supabaseClient.from('historico_admin').insert({
+     admin_id: currentUser.id,
+     acao,
+     usuario_afetado: usuarioAfetado||'',
+     detalhes: detalhes||''
+   });
+ }catch(e){
+   console.warn('Histórico não registrado. Verifique a tabela historico_admin no Supabase.',e);
+ }
+}
+
+async function carregarHistorico(){
+ const tbody=document.getElementById('listaHistorico');
+ if(!tbody) return;
+ tbody.innerHTML='<tr><td colspan="5">Carregando...</td></tr>';
+ const {data,error}=await supabaseClient
+   .from('historico_admin')
+   .select('created_at,admin_id,acao,usuario_afetado,detalhes')
+   .order('created_at',{ascending:false})
+   .limit(200);
+ if(error){
+   tbody.innerHTML=`<tr><td colspan="5" style="color:#c00">Crie a tabela historico_admin no Supabase para ativar o histórico.</td></tr>`;
+   return;
+ }
+ const ids=[...new Set((data||[]).map(x=>x.admin_id).filter(Boolean))];
+ let nomes={};
+ if(ids.length){
+   const {data:perfis}=await supabaseClient.from('perfis').select('id,nome').in('id',ids);
+   (perfis||[]).forEach(p=>nomes[p.id]=p.nome||p.id);
+ }
+ tbody.innerHTML=(data||[]).map(h=>{
+   const dt=h.created_at?new Date(h.created_at).toLocaleString('pt-BR'):'';
+   return `<tr><td>${esc(dt)}</td><td>${esc(nomes[h.admin_id]||h.admin_id||'')}</td><td>${esc(h.acao||'')}</td><td>${esc(h.usuario_afetado||'')}</td><td>${esc(h.detalhes||'')}</td></tr>`;
+ }).join('') || '<tr><td colspan="5">Nenhuma ação registrada.</td></tr>';
 }
 
 function limparUsuarioForm(){
@@ -196,15 +360,37 @@ function limparUsuarioForm(){
 async function carregar(){
  const {data,error}=await supabaseClient.from('processos').select('*').order('data',{ascending:false}).order('created_at',{ascending:false});
  if(error){alert(error.message);return}
- processes=data||[];render();
+ processes=data||[];
+
+ const ids=[...new Set(processes.flatMap(p=>[p.created_by,p.updated_by]).filter(Boolean))];
+ if(ids.length){
+   const {data:perfis}=await supabaseClient.from('perfis').select('id,nome').in('id',ids);
+   const nomes={};
+   (perfis||[]).forEach(x=>nomes[x.id]=x.nome||'Usuário');
+   processes=processes.map(p=>({
+     ...p,
+     created_by_name:nomes[p.created_by]||'Não informado',
+     updated_by_name:nomes[p.updated_by]||''
+   }));
+ }else{
+   processes=processes.map(p=>({...p,created_by_name:'Não informado',updated_by_name:''}));
+ }
+ render();
 }
+
 function statusClass(s){return (statuses.find(x=>x.v===s)||{}).c||''}
 function render(){
  const busca=(fBusca.value||'').toLowerCase(), st=fStatus.value, ini=fIni.value, fim=fFim.value;
  const list=processes.filter(p=>(!busca || (p.parceiro||'').toLowerCase().includes(busca)||(p.cliente||'').toLowerCase().includes(busca))&&(!st||p.status===st)&&(!ini||p.data>=ini)&&(!fim||p.data<=fim));
- tbody.innerHTML=list.map(p=>`<tr><td>${br(p.data)}</td><td>${esc(p.parceiro)}</td><td>${esc(p.cliente)}</td><td><span class="status ${statusClass(p.status)}">${esc(p.status)}</span></td><td class="actions"><button class="btn secondary small" onclick="editar('${p.id}')">Editar</button><button class="btn danger small" onclick="excluir('${p.id}')">Excluir</button></td></tr>`).join('');
+ tbody.innerHTML=list.map(p=>{
+   const usuario=p.created_by_name||'Não informado';
+   const alteracao=p.updated_by_name && p.updated_by_name!==usuario
+     ? `<div style="font-size:11px;color:#667085">Últ. alteração: ${esc(p.updated_by_name)}</div>` : '';
+   return `<tr><td>${br(p.data)}</td><td>${esc(p.parceiro)}</td><td>${esc(p.cliente)}</td><td><span class="status ${statusClass(p.status)}">${esc(p.status)}</span></td><td><b>${esc(usuario)}</b>${alteracao}</td><td class="actions"><button class="btn secondary small" onclick="editar('${p.id}')">Editar</button><button class="btn danger small" onclick="excluir('${p.id}')">Excluir</button></td></tr>`;
+ }).join('');
  atualizarCards(list);
 }
+
 function atualizarCards(list){
  cTotal.textContent=list.length;cVideo.textContent=list.filter(p=>p.status==='Processo de Vídeo').length;
  cOnline.textContent=list.filter(p=>p.status==='Emissão Online').length;cDoc.textContent=list.filter(p=>p.status==='Pendente de Documento').length;
@@ -213,16 +399,41 @@ cCaf.textContent=list.filter(p=>p.status==='CAF').length;
 cDone.textContent=list.filter(p=>p.status==='Concluído').length;
 }
 async function salvarProcesso(){
- const obj={data:pData.value,parceiro:pParceiro.value.trim(),cliente:pCliente.value.trim(),status:pStatus.value};
- if(!obj.data||!obj.parceiro||!obj.cliente){saveMsg.textContent='Preencha data, parceiro e cliente.';return}
+ const obj={
+   data:pData.value,
+   parceiro:pParceiro.value.trim(),
+   cliente:pCliente.value.trim(),
+   status:pStatus.value
+ };
+ if(!obj.data||!obj.parceiro||!obj.cliente){
+   saveMsg.textContent='Preencha data, parceiro e cliente.';
+   return;
+ }
+
  let result;
- if(editingId) result=await supabaseClient.from('processos').update(obj).eq('id',editingId);
- else result=await supabaseClient.from('processos').insert(obj);
- if(result.error){saveMsg.textContent=result.error.message;return}
+ if(editingId){
+   result=await supabaseClient.from('processos')
+     .update({...obj,updated_by:currentUser.id})
+     .eq('id',editingId);
+ }else{
+   result=await supabaseClient.from('processos')
+     .insert({...obj,created_by:currentUser.id,updated_by:currentUser.id});
+ }
+
+ if(result.error){
+   saveMsg.textContent=result.error.message;
+   return;
+ }
+
  saveMsg.textContent='Salvo automaticamente no sistema.';
- editingId=null;pParceiro.value='';pCliente.value='';pStatus.value=statuses[0].v;
- await carregar();setTimeout(()=>saveMsg.textContent='',2000);
+ editingId=null;
+ pParceiro.value='';
+ pCliente.value='';
+ pStatus.value=statuses[0].v;
+ await carregar();
+ setTimeout(()=>saveMsg.textContent='',2000);
 }
+
 function editar(id){const p=processes.find(x=>String(x.id)===String(id));if(!p)return;editingId=p.id;pData.value=p.data;pParceiro.value=p.parceiro;pCliente.value=p.cliente;pStatus.value=p.status;saveMsg.textContent='Editando processo — altere os dados e clique em Salvar.';window.scrollTo({top:0,behavior:'smooth'});setTimeout(()=>pCliente.focus(),300);}
 async function excluir(id){if(!confirm('Excluir este processo?'))return;const {error}=await supabaseClient.from('processos').delete().eq('id',id);if(error)alert(error.message);else carregar()}
 function esc(x){return String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
