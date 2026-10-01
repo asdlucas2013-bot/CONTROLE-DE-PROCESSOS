@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Controle de Processos</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f6f9;color:#1f2937}
+header{background:#123b63;color:#fff;padding:16px 22px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:20px;margin:0}.btn{border:0;border-radius:7px;padding:10px 14px;cursor:pointer;font-weight:600}
+.primary{background:#1677d2;color:#fff}.danger{background:#dc3545;color:#fff}.secondary{background:#e5e7eb;color:#111827}
+.container{max-width:1250px;margin:22px auto;padding:0 15px}.hidden{display:none!important}
+.login{max-width:420px;margin:70px auto;background:#fff;padding:28px;border-radius:12px;box-shadow:0 5px 25px #0001}
+input,select{width:100%;padding:11px;border:1px solid #ccd3da;border-radius:7px;margin:6px 0 14px;background:#fff}
+label{font-size:13px;font-weight:700}.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.cards{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px}
+.card{background:#fff;padding:16px;border-radius:10px;box-shadow:0 2px 10px #0000000d}.card b{display:block;font-size:24px;margin-top:6px}
+.panel{background:#fff;border-radius:10px;padding:18px;margin-bottom:20px;box-shadow:0 2px 10px #0000000d}
+table{width:100%;border-collapse:collapse}th,td{padding:11px;border-bottom:1px solid #e5e7eb;text-align:left;font-size:14px}
+th{background:#f8fafc}.status{padding:5px 8px;border-radius:20px;font-size:12px;font-weight:700;display:inline-block}
+.s1{background:#dbeafe;color:#1d4ed8}.s2{background:#ede9fe;color:#6d28d9}.s3{background:#fef3c7;color:#92400e}.s4{background:#fee2e2;color:#991b1b}.s5{background:#dcfce7;color:#166534}
+.actions{display:flex;gap:6px}.small{padding:6px 9px;font-size:12px}
+@media(max-width:900px){.grid,.cards{grid-template-columns:repeat(2,1fr)}}@media(max-width:600px){.grid,.cards{grid-template-columns:1fr}table{display:block;overflow:auto}}
+</style>
+</head>
+<body>
+<div id="loginPage" class="login">
+<h2>Controle de Processos</h2><p>Acesso interno</p>
+<label>E-mail</label><input id="loginEmail" type="email" autocomplete="username">
+<label>Senha</label><input id="loginPassword" type="password" autocomplete="current-password">
+<button class="btn primary" style="width:100%" onclick="login()">Entrar</button>
+<p id="loginMsg" style="color:#c00"></p>
+</div>
+
+<div id="app" class="hidden">
+<header><h1>Controle de Processos</h1><div><span id="userInfo"></span> <button class="btn secondary" onclick="logout()">Sair</button></div></header>
+<div class="container">
+<div class="cards">
+<div class="card">Total<b id="cTotal">0</b></div>
+<div class="card">Vídeo<b id="cVideo">0</b></div>
+<div class="card">Emissão Online<b id="cOnline">0</b></div>
+<div class="card">Doc. Pendente<b id="cDoc">0</b></div>
+<div class="card">PG Pendente<b id="cPg">0</b></div>
+<div class="card">Concluídos<b id="cDone">0</b></div>
+</div>
+
+<div class="panel">
+<h3>Novo processo</h3>
+<div class="grid">
+<div><label>Data</label><input id="pData" type="date"></div>
+<div><label>Parceiro</label><input id="pParceiro" placeholder="Nome do parceiro"></div>
+<div><label>Nome do cliente / CEL</label><input id="pCliente" type="text" placeholder="Nome do cliente / CEL" autocomplete="off"></div>
+<div><label>Status</label><select id="pStatus"></select></div>
+<div style="display:flex;align-items:end"><button class="btn primary" style="width:100%" onclick="salvarProcesso()">Salvar</button></div>
+</div>
+<p id="saveMsg"></p>
+</div>
+
+<div class="panel">
+<h3>Processos</h3>
+<div class="grid" style="grid-template-columns:2fr 1fr 1fr 1fr">
+<div><label>Pesquisar</label><input id="fBusca" placeholder="Cliente ou parceiro" oninput="render()"></div>
+<div><label>Status</label><select id="fStatus" onchange="render()"></select></div>
+<div><label>Data inicial</label><input id="fIni" type="date" onchange="render()"></div>
+<div><label>Data final</label><input id="fFim" type="date" onchange="render()"></div>
+</div>
+<table><thead><tr><th>Data</th><th>Parceiro</th><th>Nome do cliente / CEL</th><th>Status</th><th>Ações</th></tr></thead><tbody id="tbody"></tbody></table>
+</div>
+
+<div id="adminPanel" class="panel hidden">
+<h3>👤 Administração de usuários</h3>
+<p style="color:#667085">Somente administradores podem cadastrar novos usuários.</p>
+<div class="grid" style="grid-template-columns:2fr 2fr 1fr 1fr">
+<div><label>Nome</label><input id="uNome" placeholder="Nome do usuário"></div>
+<div><label>E-mail</label><input id="uEmail" type="email" placeholder="usuario@empresa.com"></div>
+<div><label>Senha</label><input id="uSenha" type="password" placeholder="Mínimo 6 caracteres"></div>
+<div><label>Perfil</label><select id="uPerfil"><option value="operador">Operador</option><option value="admin">Administrador</option></select></div>
+</div>
+<button class="btn primary" onclick="cadastrarUsuario()">Cadastrar usuário</button>
+<button class="btn secondary" onclick="limparUsuarioForm()">Limpar</button>
+<p id="userMsg"></p>
+</div>
+</div></div>
+
+<script src="config.js"></script>
+<script>
+const statuses=[
+ {v:'Processo de Vídeo',c:'s1'},
+ {v:'Emissão Online',c:'s2'},
+ {v:'Pendente de Documento',c:'s3'},
+ {v:'Pendente de PG',c:'s4'},
+ {v:'CAF',c:'s6'},
+ {v:'Concluído',c:'s5'}
+];let supabaseClient=null, processes=[], editingId=null, currentUser=null;
+
+function setup(){
+ document.getElementById('pData').value=new Date().toISOString().slice(0,10);
+ document.getElementById('pStatus').innerHTML=statuses.map(x=>`<option>${x.v}</option>`).join('');
+ document.getElementById('fStatus').innerHTML='<option value="">Todos os status</option>'+statuses.map(x=>`<option>${x.v}</option>`).join('');
+ if(window.SUPABASE_URL && window.SUPABASE_ANON_KEY && !window.SUPABASE_URL.includes('COLOQUE')){
+   supabaseClient=window.supabase.createClient(window.SUPABASE_URL,window.SUPABASE_ANON_KEY);
+   supabaseClient.auth.onAuthStateChange((_e,s)=>{if(s) openApp(s.user); else showLogin();});
+ } else document.getElementById('loginMsg').textContent='Configure o arquivo config.js com os dados do Supabase.';
+}
+async function login(){
+ if(!supabaseClient)return;
+ const email=loginEmail.value.trim(), password=loginPassword.value;
+ const {error}=await supabaseClient.auth.signInWithPassword({email,password});
+ if(error) loginMsg.textContent=error.message;
+}
+async function logout(){await supabaseClient.auth.signOut()}
+function showLogin(){loginPage.classList.remove('hidden');app.classList.add('hidden')}
+async function openApp(user){
+ currentUser=user; loginPage.classList.add('hidden');app.classList.remove('hidden');
+ userInfo.textContent=user.email||'Usuário';
+ await carregarPerfil();
+ await carregar();
+}
+
+async function carregarPerfil(){
+ const {data,error}=await supabaseClient
+   .from('perfis')
+   .select('nome,perfil')
+   .eq('id',currentUser.id)
+   .single();
+
+ if(error){
+   console.error('Erro ao carregar perfil:', error);
+   adminPanel.classList.add('hidden');
+   return;
+ }
+
+ const nomePerfil=data?.nome||currentUser.email||'Usuário';
+ userInfo.textContent=`${nomePerfil} (${data?.perfil||'operador'})`;
+
+ if(data?.perfil==='admin'){
+   adminPanel.classList.remove('hidden');
+ }else{
+   adminPanel.classList.add('hidden');
+ }
+}
+
+async function cadastrarUsuario(){
+ const nome=uNome.value.trim();
+ const email=uEmail.value.trim();
+ const senha=uSenha.value;
+ const perfil=uPerfil.value;
+
+ if(!nome||!email||!senha){
+   userMsg.style.color='#c00';
+   userMsg.textContent='Preencha nome, e-mail e senha.';
+   return;
+ }
+
+ if(senha.length<6){
+   userMsg.style.color='#c00';
+   userMsg.textContent='A senha deve ter pelo menos 6 caracteres.';
+   return;
+ }
+
+ userMsg.style.color='#555';
+ userMsg.textContent='Cadastrando...';
+
+ const {data,error}=await supabaseClient.functions.invoke('criar-usuario',{
+   body:{nome,email,senha,perfil}
+ });
+
+ if(error){
+   console.error(error);
+   userMsg.style.color='#c00';
+   userMsg.textContent='Erro ao cadastrar: '+(error.message||'verifique os logs da função.');
+   return;
+ }
+
+ if(data?.error){
+   userMsg.style.color='#c00';
+   userMsg.textContent='Erro ao cadastrar: '+data.error;
+   return;
+ }
+
+ userMsg.style.color='#087443';
+ userMsg.textContent='Usuário cadastrado com sucesso.';
+ limparUsuarioForm();
+ setTimeout(()=>userMsg.textContent='',3000);
+}
+
+function limparUsuarioForm(){
+ uNome.value='';
+ uEmail.value='';
+ uSenha.value='';
+ uPerfil.value='operador';
+}
+
+async function carregar(){
+ const {data,error}=await supabaseClient.from('processos').select('*').order('data',{ascending:false}).order('created_at',{ascending:false});
+ if(error){alert(error.message);return}
+ processes=data||[];render();
+}
+function statusClass(s){return (statuses.find(x=>x.v===s)||{}).c||''}
+function render(){
+ const busca=(fBusca.value||'').toLowerCase(), st=fStatus.value, ini=fIni.value, fim=fFim.value;
+ const list=processes.filter(p=>(!busca || (p.parceiro||'').toLowerCase().includes(busca)||(p.cliente||'').toLowerCase().includes(busca))&&(!st||p.status===st)&&(!ini||p.data>=ini)&&(!fim||p.data<=fim));
+ tbody.innerHTML=list.map(p=>`<tr><td>${br(p.data)}</td><td>${esc(p.parceiro)}</td><td>${esc(p.cliente)}</td><td><span class="status ${statusClass(p.status)}">${esc(p.status)}</span></td><td class="actions"><button class="btn secondary small" onclick="editar('${p.id}')">Editar</button><button class="btn danger small" onclick="excluir('${p.id}')">Excluir</button></td></tr>`).join('');
+ atualizarCards(list);
+}
+function atualizarCards(list){
+ cTotal.textContent=list.length;cVideo.textContent=list.filter(p=>p.status==='Processo de Vídeo').length;
+ cOnline.textContent=list.filter(p=>p.status==='Emissão Online').length;cDoc.textContent=list.filter(p=>p.status==='Pendente de Documento').length;
+ cPg.textContent=list.filter(p=>p.status==='Pendente de PG').length;cDone.textContent=list.filter(p=>p.status==='Concluído').length;
+}
+async function salvarProcesso(){
+ const obj={data:pData.value,parceiro:pParceiro.value.trim(),cliente:pCliente.value.trim(),status:pStatus.value};
+ if(!obj.data||!obj.parceiro||!obj.cliente){saveMsg.textContent='Preencha data, parceiro e cliente.';return}
+ let result;
+ if(editingId) result=await supabaseClient.from('processos').update(obj).eq('id',editingId);
+ else result=await supabaseClient.from('processos').insert(obj);
+ if(result.error){saveMsg.textContent=result.error.message;return}
+ saveMsg.textContent='Salvo automaticamente no sistema.';
+ editingId=null;pParceiro.value='';pCliente.value='';pStatus.value=statuses[0].v;
+ await carregar();setTimeout(()=>saveMsg.textContent='',2000);
+}
+function editar(id){const p=processes.find(x=>String(x.id)===String(id));if(!p)return;editingId=p.id;pData.value=p.data;pParceiro.value=p.parceiro;pCliente.value=p.cliente;pStatus.value=p.status;saveMsg.textContent='Editando processo — altere os dados e clique em Salvar.';window.scrollTo({top:0,behavior:'smooth'});setTimeout(()=>pCliente.focus(),300);}
+async function excluir(id){if(!confirm('Excluir este processo?'))return;const {error}=await supabaseClient.from('processos').delete().eq('id',id);if(error)alert(error.message);else carregar()}
+function esc(x){return String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function br(d){if(!d)return'';const [y,m,day]=d.split('-');return `${day}/${m}/${y}`}
+setup();
+</script>
+</body>
+</html>
