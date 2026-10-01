@@ -37,7 +37,7 @@ th{background:#f8fafc}.status{padding:5px 8px;border-radius:20px;font-size:12px;
 <header><h1>Controle de Processos</h1><div><span id="userInfo"></span> <button class="btn secondary" onclick="logout()">Sair</button></div></header>
 <div class="container">
 <div class="cards">
-<div class="card">Total<b id="cTotal">0</b></div>
+<div class="card">Total<b id="cTotal">0</b></div><div class="card">Aguardando aceitar<b id="cAguardando">0</b></div>
 <div class="card">Vídeo<b id="cVideo">0</b></div>
 <div class="card">Emissão Online<b id="cOnline">0</b></div>
 <div class="card">Doc. Pendente<b id="cDoc">0</b></div>
@@ -392,7 +392,7 @@ function render(){
 }
 
 function atualizarCards(list){
- cTotal.textContent=list.length;cVideo.textContent=list.filter(p=>p.status==='Processo de Vídeo').length;
+ cTotal.textContent=list.length;cAguardando.textContent=list.filter(p=>p.status==='Aguardando aceitar').length;cVideo.textContent=list.filter(p=>p.status==='Processo de Vídeo').length;
  cOnline.textContent=list.filter(p=>p.status==='Emissão Online').length;cDoc.textContent=list.filter(p=>p.status==='Pendente de Documento').length;
  cPg.textContent=list.filter(p=>p.status==='Pendente de PG').length;
 cCaf.textContent=list.filter(p=>p.status==='CAF').length;
