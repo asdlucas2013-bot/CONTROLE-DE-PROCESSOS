@@ -105,6 +105,32 @@ th{background:#f8fafc}.status{padding:5px 8px;border-radius:20px;font-size:12px;
 </div>
 </div></div>
 
+
+<div id="historicoModal" class="hidden" style="position:fixed;inset:0;background:#0008;z-index:9999;padding:30px;overflow:auto">
+  <div style="max-width:1000px;margin:20px auto;background:#fff;border-radius:12px;padding:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <h2 style="margin:0">📋 Histórico do processo</h2>
+      <button class="btn secondary" onclick="fecharHistoricoProcesso()">Fechar</button>
+    </div>
+    <p id="historicoProcessoTitulo" style="color:#667085"></p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Data/Hora</th>
+            <th>Usuário</th>
+            <th>Ação</th>
+            <th>Status anterior</th>
+            <th>Novo status</th>
+            <th>Detalhes</th>
+          </tr>
+        </thead>
+        <tbody id="historicoProcessoBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <script src="config.js"></script>
 <script>
 const statuses=[
@@ -415,7 +441,7 @@ function render(){
    const usuario=p.created_by_name||'Não informado';
    const alteracao=p.updated_by_name && p.updated_by_name!==usuario
      ? `<div style="font-size:11px;color:#667085">Últ. alteração: ${esc(p.updated_by_name)}</div>` : '';
-   return `<tr><td>${br(p.data)}</td><td>${esc(p.parceiro)}</td><td>${esc(p.cliente)}</td><td><span class="status ${statusClass(p.status)}">${esc(p.status)}</span></td><td><b>${esc(usuario)}</b>${alteracao}</td><td class="actions"><button class="btn secondary small" onclick="editar('${p.id}')">Editar</button><button class="btn danger small" onclick="excluir('${p.id}')">Excluir</button></td></tr>`;
+   return `<tr><td>${br(p.data)}</td><td>${esc(p.parceiro)}</td><td>${esc(p.cliente)}</td><td><span class="status ${statusClass(p.status)}">${esc(p.status)}</span></td><td><b>${esc(usuario)}</b>${alteracao}</td><td class="actions"><button class="btn secondary small" onclick="editar('${p.id}')">Editar</button><button class="btn secondary small" onclick="verHistoricoProcesso('${p.id}')">Histórico</button><button class="btn danger small" onclick="excluir('${p.id}')">Excluir</button></td></tr>`;
  }).join('');
  atualizarCards(list);
 }
@@ -434,24 +460,52 @@ async function salvarProcesso(){
    cliente:pCliente.value.trim(),
    status:pStatus.value
  };
+
  if(!obj.data||!obj.parceiro||!obj.cliente){
    saveMsg.textContent='Preencha data, parceiro e cliente.';
    return;
  }
 
  let result;
+ let processoId;
+ let statusAnterior='';
+
  if(editingId){
+   const anterior=processes.find(x=>String(x.id)===String(editingId));
+   statusAnterior=anterior?.status||'';
    result=await supabaseClient.from('processos')
      .update({...obj,updated_by:currentUser.id})
      .eq('id',editingId);
+   processoId=editingId;
  }else{
    result=await supabaseClient.from('processos')
-     .insert({...obj,created_by:currentUser.id,updated_by:currentUser.id});
+     .insert({...obj,created_by:currentUser.id,updated_by:currentUser.id})
+     .select('id')
+     .single();
+   processoId=result.data?.id;
  }
 
  if(result.error){
    saveMsg.textContent=result.error.message;
    return;
+ }
+
+ const acao=editingId?'Edição':'Cadastro';
+ const detalhe=editingId
+   ? `Cliente: ${obj.cliente} | Parceiro: ${obj.parceiro}`
+   : `Cliente: ${obj.cliente} | Parceiro: ${obj.parceiro}`;
+
+ const {error:histError}=await supabaseClient.from('historico_processos').insert({
+   processo_id:String(processoId),
+   usuario_id:currentUser.id,
+   acao,
+   status_anterior:statusAnterior||null,
+   status_novo:obj.status,
+   detalhes:detalhe
+ });
+
+ if(histError){
+   console.warn('Processo salvo, mas histórico não foi registrado:',histError.message);
  }
 
  saveMsg.textContent='Salvo automaticamente no sistema.';
@@ -463,8 +517,75 @@ async function salvarProcesso(){
  setTimeout(()=>saveMsg.textContent='',2000);
 }
 
+async function verHistoricoProcesso(id){
+ const p=processes.find(x=>String(x.id)===String(id));
+ const body=document.getElementById('historicoProcessoBody');
+ const modal=document.getElementById('historicoModal');
+ const titulo=document.getElementById('historicoProcessoTitulo');
+
+ body.innerHTML='<tr><td colspan="6">Carregando...</td></tr>';
+ titulo.textContent=`Cliente: ${p?.cliente||''} | Parceiro: ${p?.parceiro||''}`;
+ modal.classList.remove('hidden');
+
+ const {data,error}=await supabaseClient
+   .from('historico_processos')
+   .select('created_at,usuario_id,acao,status_anterior,status_novo,detalhes')
+   .eq('processo_id',String(id))
+   .order('created_at',{ascending:false});
+
+ if(error){
+   body.innerHTML=`<tr><td colspan="6" style="color:#c00">Erro ao carregar histórico: ${esc(error.message)}</td></tr>`;
+   return;
+ }
+
+ const ids=[...new Set((data||[]).map(x=>x.usuario_id).filter(Boolean))];
+ let nomes={};
+ if(ids.length){
+   const {data:perfis}=await supabaseClient.from('perfis').select('id,nome').in('id',ids);
+   (perfis||[]).forEach(x=>nomes[x.id]=x.nome||'Usuário');
+ }
+
+ body.innerHTML=(data||[]).map(h=>{
+   const dt=h.created_at?new Date(h.created_at).toLocaleString('pt-BR'):'';
+   return `<tr>
+     <td>${esc(dt)}</td>
+     <td>${esc(nomes[h.usuario_id]||h.usuario_id||'Não informado')}</td>
+     <td>${esc(h.acao||'')}</td>
+     <td>${esc(h.status_anterior||'—')}</td>
+     <td>${esc(h.status_novo||'—')}</td>
+     <td>${esc(h.detalhes||'')}</td>
+   </tr>`;
+ }).join('') || '<tr><td colspan="6">Nenhum histórico registrado para este processo.</td></tr>';
+}
+
+function fecharHistoricoProcesso(){
+ document.getElementById('historicoModal').classList.add('hidden');
+}
+
 function editar(id){const p=processes.find(x=>String(x.id)===String(id));if(!p)return;editingId=p.id;pData.value=p.data;pParceiro.value=p.parceiro;pCliente.value=p.cliente;pStatus.value=p.status;saveMsg.textContent='Editando processo — altere os dados e clique em Salvar.';window.scrollTo({top:0,behavior:'smooth'});setTimeout(()=>pCliente.focus(),300);}
-async function excluir(id){if(!confirm('Excluir este processo?'))return;const {error}=await supabaseClient.from('processos').delete().eq('id',id);if(error)alert(error.message);else carregar()}
+async function excluir(id){
+ if(!confirm('Excluir este processo?')) return;
+
+ const p=processes.find(x=>String(x.id)===String(id));
+
+ const {error:histError}=await supabaseClient.from('historico_processos').insert({
+   processo_id:String(id),
+   usuario_id:currentUser.id,
+   acao:'Exclusão',
+   status_anterior:p?.status||null,
+   status_novo:null,
+   detalhes:`Cliente: ${p?.cliente||''} | Parceiro: ${p?.parceiro||''}`
+ });
+
+ if(histError){
+   console.warn('Histórico de exclusão não foi registrado:',histError.message);
+ }
+
+ const {error}=await supabaseClient.from('processos').delete().eq('id',id);
+ if(error) alert(error.message);
+ else carregar();
+}
+
 function esc(x){return String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function br(d){if(!d)return'';const [y,m,day]=d.split('-');return `${day}/${m}/${y}`}
 setup();
