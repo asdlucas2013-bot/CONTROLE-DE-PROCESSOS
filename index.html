@@ -447,12 +447,25 @@ function render(){
 }
 
 function atualizarCards(list){
- cTotal.textContent=list.filter(p=>p.status!=='Concluído').length;cAguardando.textContent=list.filter(p=>p.status==='Aguardando aceitar').length;cVideo.textContent=list.filter(p=>p.status==='Processo de Vídeo').length;
- cOnline.textContent=list.filter(p=>p.status==='Emissão Online').length;cDoc.textContent=list.filter(p=>p.status==='Pendente de Documento').length;
- cPg.textContent=list.filter(p=>p.status==='Pendente de PG').length;
-cCaf.textContent=list.filter(p=>p.status==='CAF').length;
-cDone.textContent=list.filter(p=>p.status==='Concluído').length;
+ const totalAtivos=list.filter(p=>p.status!=='Concluído').length;
+ const totalConcluidos=list.filter(p=>p.status==='Concluído').length;
+ const totalAguardando=list.filter(p=>p.status==='Aguardando aceitar').length;
+ const totalVideo=list.filter(p=>p.status==='Processo de Vídeo').length;
+ const totalOnline=list.filter(p=>p.status==='Emissão Online').length;
+ const totalDoc=list.filter(p=>p.status==='Pendente de Documento').length;
+ const totalPg=list.filter(p=>p.status==='Pendente de PG').length;
+ const totalCaf=list.filter(p=>p.status==='CAF').length;
+
+ cTotal.textContent=totalAtivos;
+ cAguardando.textContent=totalAguardando;
+ cVideo.textContent=totalVideo;
+ cOnline.textContent=totalOnline;
+ cDoc.textContent=totalDoc;
+ cPg.textContent=totalPg;
+ cCaf.textContent=totalCaf;
+ cDone.textContent=totalConcluidos;
 }
+
 async function salvarProcesso(){
  const obj={
    data:pData.value,
