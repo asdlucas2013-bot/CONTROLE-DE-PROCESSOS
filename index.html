@@ -447,7 +447,7 @@ function render(){
 }
 
 function atualizarCards(list){
- cTotal.textContent=list.length;cAguardando.textContent=list.filter(p=>p.status==='Aguardando aceitar').length;cVideo.textContent=list.filter(p=>p.status==='Processo de Vídeo').length;
+ cTotal.textContent=list.filter(p=>p.status!=='Concluído').length;cAguardando.textContent=list.filter(p=>p.status==='Aguardando aceitar').length;cVideo.textContent=list.filter(p=>p.status==='Processo de Vídeo').length;
  cOnline.textContent=list.filter(p=>p.status==='Emissão Online').length;cDoc.textContent=list.filter(p=>p.status==='Pendente de Documento').length;
  cPg.textContent=list.filter(p=>p.status==='Pendente de PG').length;
 cCaf.textContent=list.filter(p=>p.status==='CAF').length;
